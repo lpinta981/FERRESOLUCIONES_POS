@@ -7,10 +7,26 @@ let highlightedIndex = -1;
 let cart = JSON.parse(localStorage.getItem('pos_cart') || '[]'); // Cargar carrito del localStorage
 let isEditing = false; // Variable para modo edición
 let isSearching = false; // Variable para controlar si hay una búsqueda en curso
+let isUpdatingQuantity = false; // Variable para prevenir múltiples actualizaciones simultáneas
+let lastKeyPressTime = 0; // Timestamp del último evento de teclado
+const KEY_DEBOUNCE_DELAY = 150; // Milisegundos entre eventos de teclado permitidos
 
 // Función para guardar carrito en localStorage
 function saveCartToLocalStorage() {
     localStorage.setItem('pos_cart', JSON.stringify(cart));
+}
+
+// Función para formatear números para URLs (siempre con punto)
+function formatNumberForURL(value) {
+    if (isNaN(value) || value === null || value === undefined) {
+        return '0.00';
+    }
+    return value.toFixed(2);
+}
+
+// Función para resetear el timestamp de teclado (útil para debugging y control)
+function resetKeyTimestamp() {
+    lastKeyPressTime = 0;
 }
 
 // Función para formatear moneda
@@ -24,9 +40,12 @@ function formatCurrency(value) {
         return '$0.00';
     }
     
-    return new Intl.NumberFormat('en-US', {
+    // Usar formato ecuatoriano con coma como separador decimal
+    return new Intl.NumberFormat('es-EC', {
         style: 'currency',
-        currency: 'USD'
+        currency: 'USD',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
     }).format(value);
 }
 
@@ -39,7 +58,10 @@ function parsePrice(priceString) {
     // Remover símbolos de moneda y espacios
     const cleaned = priceString.replace(/[$€£¥₹₽₩₦₨₪₫₡₵₺₴₸₼₲₱₭₯₰₳₶₷₹₻₽₾₿]/g, '').trim();
     
-    const parsed = parseFloat(cleaned);
+    // Reemplazar coma por punto para asegurar parseo correcto
+    const normalized = cleaned.replace(',', '.');
+    
+    const parsed = parseFloat(normalized);
     return isNaN(parsed) ? 0 : parsed;
 }
 
@@ -79,11 +101,17 @@ function clearSearchState() {
     
     if (resultsContainer) {
         resultsContainer.classList.add('hidden');
+        // Resetear el scroll del contenedor
+        const scrollContainer = document.querySelector('.results-container');
+        if (scrollContainer) {
+            scrollContainer.scrollTop = 0;
+        }
     }
     
     searchResults = [];
     highlightedIndex = -1;
     isSearching = false;
+    resetKeyTimestamp(); // Resetear timestamp
 }
 
 // Función para eliminar del carrito (global)
@@ -123,7 +151,7 @@ function printReceipt() {
         var nombreProducto = item.producto.replace(/,/g, ".");
         servicios.push(encodeURIComponent(nombreProducto));
         p_units.push(item.precio);
-        p_total.push((item.precio * item.cantidad).toFixed(2));
+        p_total.push(formatNumberForURL(item.precio * item.cantidad));
     });
 
     // Obtener fecha actual formateada
@@ -146,7 +174,7 @@ function printReceipt() {
     var url = "https://pos.manasakilla.com/RECIBO.html" +
         "?fecha=" + encodeURIComponent(formattedDate) +
         "&venta=" + encodeURIComponent("VENTA-" + Date.now()) +
-        "&subtotal=" + encodeURIComponent(total.toFixed(2)) +
+        "&subtotal=" + encodeURIComponent(formatNumberForURL(total)) +
         "&descuento=0" +
         "&vendedor=CAJAPC" +
         "&nombre_cliente=" + encodeURIComponent("CONSUMIDOR FINAL") +
@@ -156,7 +184,7 @@ function printReceipt() {
         "&cantidades=" + cantidades.join(',') +
         "&servicios=" + servicios.join(',') +
         "&p_units=" + p_units.join(',') +
-        "&total=" + encodeURIComponent(total.toFixed(2)) +
+        "&total=" + encodeURIComponent(formatNumberForURL(total)) +
         "&p_total=" + p_total.join(',') +
         "&tipo_documento=RECIBO";
 
@@ -231,6 +259,12 @@ function toggleEditable() {
     } else if (productSearch) {
         productSearch.focus();
     }
+
+    // Resetear timestamp al cambiar de modo
+    resetKeyTimestamp();
+    
+    // Configurar event listeners para navegación
+    setupNavigationListeners();
 }
 
 // Función para manejar cuando se pierde el foco de una celda editable
@@ -253,6 +287,125 @@ function handleCellKeyDown(event) {
     }
 }
 
+// Función para configurar los event listeners de navegación
+function setupNavigationListeners() {
+    // Remover listeners anteriores
+    document.removeEventListener("keydown", handleArrowKeys);
+    
+    // Resetear timestamp para evitar interferencia entre modos
+    resetKeyTimestamp();
+    
+    // Agregar listener para navegación
+    document.addEventListener("keydown", handleArrowKeys);
+}
+
+// Función principal para manejar teclas de flecha
+function handleArrowKeys(event) {
+    if (isEditing) {
+        handleEditModeKeys(event);
+    } else {
+        handleSearchModeKeys(event);
+    }
+}
+
+// Función para manejar teclas en modo edición
+function handleEditModeKeys(event) {
+    var currentTime = Date.now();
+    
+    // Si han pasado menos de KEY_DEBOUNCE_DELAY ms desde el último evento, ignorar
+    if (currentTime - lastKeyPressTime < KEY_DEBOUNCE_DELAY) {
+        return;
+    }
+    
+    lastKeyPressTime = currentTime;
+    
+    var cartTable = document.getElementById("cart");
+    if (!cartTable) return;
+    
+    var rows = cartTable.getElementsByTagName('tr');
+    var currentRow = document.querySelector('.highlighted-row');
+    var currentIndex = Array.from(rows).indexOf(currentRow);
+
+    switch (event.key) {
+        case "ArrowUp":
+            if (currentIndex > 1) {
+                highlightRow(currentIndex - 1);
+                event.preventDefault();
+            }
+            break;
+        case "ArrowDown":
+            if (currentIndex < rows.length - 1) {
+                highlightRow(currentIndex + 1);
+                event.preventDefault();
+            }
+            break;
+        case "+":
+            if (currentRow && !isUpdatingQuantity) {
+                updateQuantity(currentRow, 1);
+                event.preventDefault();
+            }
+            break;
+        case "-":
+            if (currentRow && !isUpdatingQuantity) {
+                updateQuantity(currentRow, -1);
+                event.preventDefault();
+            }
+            break;
+    }
+}
+
+// Función para manejar teclas en modo búsqueda
+function handleSearchModeKeys(event) {
+    var currentTime = Date.now();
+    
+    // Si han pasado menos de KEY_DEBOUNCE_DELAY ms desde el último evento, ignorar
+    if (currentTime - lastKeyPressTime < KEY_DEBOUNCE_DELAY) {
+        return;
+    }
+    
+    lastKeyPressTime = currentTime;
+    
+    var resultsContainer = document.getElementById('resultsContainer');
+    if (!resultsContainer || resultsContainer.classList.contains('hidden')) return;
+    
+    var rows = searchResultsBody.querySelectorAll('tr');
+    var highlightedRow = searchResultsBody.querySelector('.highlighted-search');
+    var highlightedIndex = highlightedRow ? Array.from(rows).indexOf(highlightedRow) : -1;
+
+    switch (event.key) {
+        case "ArrowUp":
+            event.preventDefault();
+            if (rows.length > 0) {
+                if (highlightedIndex <= 0) {
+                    // Si estamos en el primer elemento o no hay ninguno resaltado, ir al último
+                    highlightSearchResult(rows.length - 1);
+                } else {
+                    // Ir al elemento anterior
+                    highlightSearchResult(highlightedIndex - 1);
+                }
+            }
+            break;
+        case "ArrowDown":
+            event.preventDefault();
+            if (rows.length > 0) {
+                if (highlightedIndex === -1 || highlightedIndex >= rows.length - 1) {
+                    // Si no hay ninguno resaltado o estamos en el último, ir al primero
+                    highlightSearchResult(0);
+                } else {
+                    // Ir al siguiente elemento
+                    highlightSearchResult(highlightedIndex + 1);
+                }
+            }
+            break;
+        case "Enter":
+            if (highlightedIndex >= 0 && searchResults[highlightedIndex]) {
+                addToCart(searchResults[highlightedIndex].codigo);
+                event.preventDefault();
+            }
+            break;
+    }
+}
+
 // Función para resaltar fila en modo edición
 function highlightRow(index) {
     var cartTable = document.getElementById("cart");
@@ -266,7 +419,109 @@ function highlightRow(index) {
     
     if (index >= 1 && index < rows.length) {
         rows[index].classList.add("highlighted-row");
+        // Hacer scroll suave hacia la fila resaltada
+        rows[index].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
+}
+
+// Función para resaltar resultado de búsqueda
+function highlightSearchResult(index) {
+    var rows = searchResultsBody.querySelectorAll('tr');
+    
+    rows.forEach(row => row.classList.remove("highlighted-search"));
+    
+    if (index >= 0 && index < rows.length) {
+        rows[index].classList.add("highlighted-search");
+        
+        // Auto-scroll suave al elemento resaltado
+        const resultsContainer = document.querySelector('.results-container');
+        if (resultsContainer && rows[index]) {
+            // Calcular la posición del elemento dentro del contenedor
+            const containerRect = resultsContainer.getBoundingClientRect();
+            const rowRect = rows[index].getBoundingClientRect();
+            
+            // Verificar si el elemento está visible en el contenedor
+            const isVisible = rowRect.top >= containerRect.top && 
+                            rowRect.bottom <= containerRect.bottom;
+            
+            if (!isVisible) {
+                // Calcular el offset para centrar el elemento
+                const containerHeight = containerRect.height;
+                const rowHeight = rowRect.height;
+                const scrollTop = resultsContainer.scrollTop;
+                const rowTop = rows[index].offsetTop;
+                
+                // Centrar el elemento en el contenedor
+                const targetScrollTop = rowTop - (containerHeight / 2) + (rowHeight / 2);
+                
+                resultsContainer.scrollTo({
+                    top: targetScrollTop,
+                    behavior: 'smooth'
+                });
+            }
+        }
+    }
+}
+
+// Función para actualizar cantidad con + y -
+function updateQuantity(row, change) {
+    if (!row || isUpdatingQuantity) return;
+    
+    isUpdatingQuantity = true; // Marcar que estamos actualizando
+    
+    var cells = row.getElementsByTagName('td');
+    if (cells.length < 6) {
+        isUpdatingQuantity = false;
+        return;
+    }
+    
+    var quantityCell = cells[3]; // Celda de cantidad
+    var currentQuantity = parseFloat(quantityCell.innerText) || 0;
+    var newQuantity = currentQuantity + change;
+    
+    // Validar que no sea negativa
+    if (newQuantity < 0) {
+        alert("La cantidad no puede ser negativa.");
+        isUpdatingQuantity = false;
+        return;
+    }
+    
+    // Actualizar cantidad en la celda
+    quantityCell.innerText = newQuantity;
+    
+    // Actualizar el array del carrito
+    var productCode = cells[0].innerText; // Código del producto
+    var cartItem = cart.find(item => item.codigo === productCode);
+    if (cartItem) {
+        cartItem.cantidad = newQuantity;
+    }
+    
+    // Actualizar total de la fila
+    var price = parseFloat(cells[2].innerText.replace('$', '').replace(',', '')) || 0;
+    var total = price * newQuantity;
+    cells[4].innerText = formatCurrency(total);
+    
+    // Actualizar total general
+    updateCartDisplay();
+    saveCartToLocalStorage();
+    
+    // Efecto visual de flash
+    flashCell(quantityCell);
+    
+    // Resetear la variable después de un pequeño retraso
+    setTimeout(() => {
+        isUpdatingQuantity = false;
+    }, 100);
+}
+
+// Función para efecto visual de flash
+function flashCell(cell) {
+    if (!cell) return;
+    
+    cell.classList.add("flash-green");
+    setTimeout(() => {
+        cell.classList.remove("flash-green");
+    }, 300);
 }
 
 // Función para actualizar totales de celda en modo edición
@@ -301,13 +556,19 @@ function updateCellTotal(cell) {
     if (cartItem) {
         if (cell.cellIndex === 2) { // Editando precio
             cartItem.precio = newPrice;
+            // Actualizar la celda con el precio formateado
+            row.cells[2].innerText = formatCurrency(newPrice);
         } else if (cell.cellIndex === 3) { // Editando cantidad
             cartItem.cantidad = newQuantity;
         }
     }
     
     // Guardar el nuevo valor como el valor antiguo
-    cell.setAttribute('data-old-value', cell.innerText);
+    if (cell.cellIndex === 2) { // Para precios, guardar el valor formateado
+        cell.setAttribute('data-old-value', formatCurrency(newPrice));
+    } else { // Para cantidades, guardar el valor numérico
+        cell.setAttribute('data-old-value', cell.innerText);
+    }
     
     // Actualizar total general
     updateCartDisplay();
@@ -320,6 +581,11 @@ function updateCartDisplay() {
     const totalGeneral = document.getElementById('totalGeneral');
     
     if (!cartBody || !totalGeneral) return; // Safety check
+    
+    // Guardar la fila actualmente resaltada antes de recrear la tabla
+    const currentlyHighlightedRow = document.querySelector('.highlighted-row');
+    const highlightedProductCode = currentlyHighlightedRow ? 
+        currentlyHighlightedRow.cells[0].innerText : null;
     
     cartBody.innerHTML = '';
     let total = 0;
@@ -351,13 +617,24 @@ function updateCartDisplay() {
                 cells[3].addEventListener("blur", handleCellBlur);
                 cells[2].addEventListener("keydown", handleCellKeyDown);
                 cells[3].addEventListener("keydown", handleCellKeyDown);
-                cells[2].setAttribute('data-old-value', cells[2].innerText);
-                cells[3].setAttribute('data-old-value', cells[3].innerText);
+                cells[2].setAttribute('data-old-value', formatCurrency(item.precio));
+                cells[3].setAttribute('data-old-value', item.cantidad.toString());
             }
         }
     });
 
     totalGeneral.textContent = formatCurrency(total);
+    
+    // Restaurar la selección de fila después de actualizar
+    if (isEditing && highlightedProductCode) {
+        const rows = cartBody.querySelectorAll('tr');
+        for (let i = 0; i < rows.length; i++) {
+            if (rows[i].cells[0].innerText === highlightedProductCode) {
+                rows[i].classList.add('highlighted-row');
+                break;
+            }
+        }
+    }
 }
 
 // Verificar autenticación al cargar
@@ -454,11 +731,20 @@ async function searchProducts(query) {
         // Resaltar automáticamente el primer resultado
         if (searchResults.length > 0) {
             highlightedIndex = 0;
-            highlightRow(0);
+            highlightSearchResult(0);
+            
+            // Asegurar que el contenedor de resultados sea visible
+            setTimeout(() => {
+                const resultsContainer = document.querySelector('.results-container');
+                if (resultsContainer) {
+                    resultsContainer.scrollTop = 0; // Reset scroll to top
+                }
+            }, 100);
         }
     }
 
-    // Función para resaltar fila
+    // Función para resaltar fila (OBSOLETA - usar highlightSearchResult)
+    /*
     function highlightRow(index) {
         const rows = searchResultsBody.querySelectorAll('tr');
         rows.forEach((row, i) => {
@@ -469,6 +755,7 @@ async function searchProducts(query) {
             }
         });
     }
+    */
 
     // Event listeners
     productSearch.addEventListener('input', (e) => {
@@ -481,14 +768,14 @@ async function searchProducts(query) {
                 e.preventDefault();
                 if (searchResults.length > 0) {
                     highlightedIndex = Math.min(highlightedIndex + 1, searchResults.length - 1);
-                    highlightRow(highlightedIndex);
+                    highlightSearchResult(highlightedIndex);
                 }
                 break;
             case 'ArrowUp':
                 e.preventDefault();
                 if (searchResults.length > 0) {
                     highlightedIndex = Math.max(highlightedIndex - 1, 0);
-                    highlightRow(highlightedIndex);
+                    highlightSearchResult(highlightedIndex);
                 }
                 break;
             case 'Enter':

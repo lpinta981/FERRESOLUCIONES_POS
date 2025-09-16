@@ -80,6 +80,13 @@
             width: 60%;
             margin: 0 auto;
         }
+        .results-container {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.5rem;
+            background: white;
+        }
         .cart-container {
             width: 88%;
             margin: 2rem auto;
@@ -105,6 +112,41 @@
         }
         .highlighted-row {
             box-shadow: 0 0 0 2px #4CAF50 inset;
+        }
+        .highlighted-search {
+            background-color: #333 !important;
+            color: white !important;
+            border-left: 4px solid #2196f3;
+            transition: all 0.2s ease;
+            outline: none !important;
+            box-shadow: none !important;
+        }
+        .highlighted-search:hover {
+            background-color: #444 !important;
+        }
+        /* Quitar cualquier outline o focus del navegador */
+        .highlighted-search:focus,
+        .highlighted-search:active,
+        .results-container tr:focus,
+        .results-container td:focus,
+        .results-container button:focus,
+        #searchResults tr:focus,
+        #searchResults td:focus,
+        #searchResults button:focus {
+            outline: none !important;
+            box-shadow: none !important;
+        }
+        /* Asegurar que no haya estilos por defecto del navegador */
+        .results-container *,
+        #searchResults *,
+        #searchResultsBody * {
+            outline: none !important;
+            box-shadow: none !important;
+        }
+        .flash-green {
+            background-color: #4caf50 !important;
+            color: white !important;
+            transition: background-color 0.3s ease;
         }
         .low-stock {
             background-color: #fee2e2;
@@ -153,18 +195,20 @@
         
         <div id="resultsContainer" class="hidden mt-8">
             <h3 class="text-2xl font-semibold mb-4">Resultados de búsqueda</h3>
-            <table id="searchResults">
-                <thead>
-                    <tr>
-                        <th>Código</th>
-                        <th>Producto</th>
-                        <th>Precio</th>
-                        <th>Acción</th>
-                    </tr>
-                </thead>
-                <tbody id="searchResultsBody">
-                </tbody>
-            </table>
+            <div class="results-container">
+                <table id="searchResults">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Producto</th>
+                            <th>Precio</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody id="searchResultsBody">
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
     
