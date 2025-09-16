@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FERRESOLUCIONES POS</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        #loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: #f4f4f4;
+        }
+        #mainContent {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">
+        <p>Cargando...</p>
+    </div>
+    <div id="mainContent">
+        <!-- Aquí se cargará el módulo POS -->
+    </div>
+
+    <script>
+        // La configuración de Supabase está en config.js
+
+        async function checkAuthAndLoad() {
+            const session = await requireAuth();
+            if (session) {
+                loadPOS();
+            }
+        }
+
+        function loadPOS() {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('mainContent').style.display = 'block';
+            
+            // Cargar pos.html en el mainContent
+            fetch('pos.html')
+                .then(response => response.text())
+                .then(html => {
+                    document.getElementById('mainContent').innerHTML = html;
+                    // Cargar el script de pos.js
+                    const script = document.createElement('script');
+                    script.src = 'pos.js';
+                    document.body.appendChild(script);
+                });
+        }
+
+        // Esperar a que la página cargue completamente antes de verificar autenticación
+        window.addEventListener('load', () => {
+            checkAuthAndLoad();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>POS - FERRESOLUCIONES</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#fbc318',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #ffffff;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+        }
+        input[type="text"] {
+            padding: 0.875rem;
+            margin-top: 0.5rem;
+            margin-bottom: 1rem;
+            border: 2px solid #333;
+            border-radius: 0.5rem;
+            font-size: 1.125rem;
+            outline: none;
+            transition: all 0.3s;
+        }
+        input[type="text"]:focus {
+            border-color: #fbc318;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1.25rem;
+            background: white;
+            border-radius: 0.75rem;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        th {
+            background-color: #fbc318;
+            color: black;
+            padding: 1rem;
+            font-weight: 600;
+            text-align: left;
+            font-size: 1rem;
+        }
+        td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 1rem;
+        }
+        button {
+            background-color: #fbc318;
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 0.75rem;
+            cursor: pointer;
+            font-size: 1.125rem;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        button:hover {
+            background-color: #d32f2f;
+        }
+        .search-container {
+            width: 60%;
+            margin: 0 auto;
+        }
+        .cart-container {
+            width: 88%;
+            margin: 2rem auto;
+        }
+        .total-container {
+            position: absolute;
+            top: 1.25rem;
+            right: 1.25rem;
+            font-size: 2rem;
+            font-weight: bold;
+            color: #000;
+            background-color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .hidden {
+            display: none;
+        }
+        .highlighted {
+            background-color: #333;
+            color: white;
+        }
+        .highlighted-row {
+            box-shadow: 0 0 0 2px #4CAF50 inset;
+        }
+        .low-stock {
+            background-color: #fee2e2;
+        }
+        .edit-mode-button {
+            display: none;
+            margin-top: 0.75rem;
+            background-color: #4caf50;
+            position: absolute;
+            top: 1.25rem;
+            left: 1.25rem;
+            font-size: 1rem;
+            padding: 0.75rem 1.25rem;
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            z-index: 10;
+        }
+        .edit-mode {
+            display: block !important;
+        }
+        .editable {
+            background-color: #fff3cd;
+            border: 2px solid #ffc107;
+            outline: none;
+        }
+        .editable:focus {
+            background-color: #fff;
+            border-color: #007bff;
+            box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+        }
+    </style>
+</head>
+<body>
+    <div class="total-container">
+        <span id="totalGeneral">$0.00</span>
+    </div>
+
+    <h1 class="text-4xl font-bold mb-8 text-center">FERRESOLUCIONES POS</h1>
+
+    <button id="editModeButton" class="edit-mode-button">Modo Edición Activado</button>
+
+    <div class="search-container">
+        <label for="productSearch" class="text-lg font-medium">Buscar producto (código o nombre):</label>
+        <input type="text" id="productSearch" class="w-full" placeholder="Ingrese código o nombre del producto" />
+        
+        <div id="resultsContainer" class="hidden mt-8">
+            <h3 class="text-2xl font-semibold mb-4">Resultados de búsqueda</h3>
+            <table id="searchResults">
+                <thead>
+                    <tr>
+                        <th>Código</th>
+                        <th>Producto</th>
+                        <th>Precio</th>
+                        <th>Acción</th>
+                    </tr>
+                </thead>
+                <tbody id="searchResultsBody">
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="cart-container">
+        <h2 class="text-2xl font-semibold mb-4">Carrito</h2>
+        <table id="cart">
+            <thead>
+                <tr>
+                    <th>Código</th>
+                    <th>Producto</th>
+                    <th>Precio</th>
+                    <th>Cantidad</th>
+                    <th>Total</th>
+                    <th>Acción</th>
+                </tr>
+            </thead>
+            <tbody id="cartBody">
+            </tbody>
+        </table>
+        
+        <div class="mt-8 text-center">
+            <button id="clearCartBtn">Limpiar Carrito</button>
+            <button id="printReceiptBtn" class="ml-4">Imprimir Recibo</button>
+            <button id="logoutBtn" class="ml-4" onclick="logout()">Cerrar Sesión</button>
+        </div>
+    </div>
+</body>
+</html>
